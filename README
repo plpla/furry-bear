@@ -1,0 +1,11 @@
+In this project, I have tried to work with sequences positions starting at 1 (not 0 like python).
+
+Some functionnality require Pysam. It should be shipped with the code.
+Pysam require cython, zlib ans easy_install (python setup-tools)
+Some functions requires biopython. It can be installed (debian based os) using:
+sudo apt-get install python-biopython
+More info at:
+biopython.org
+
+This is still in heavy developpement. New versions avaiblable every week.
+

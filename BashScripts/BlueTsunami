@@ -1,0 +1,77 @@
+#!/bin/bash
+# author: Sébastien Boisvert
+# date: 2011-12-23
+
+# this is some heavy scripting
+# parallel machines in bash
+# I use variable indirection
+
+referenceFileOrigin=$1
+
+# the argument must not be absolute paths.
+sampleDirectoryOrigin=$2
+processors=$3
+output=$4
+
+mkdir $output
+cd $output
+
+source $DARK_FISH_TECHNOLOGY
+
+DarkFishTechnology_initializeDirectory
+
+DarkFishTechnology_prepareReference $referenceFileOrigin
+DarkFishTechnology_prepareSample $sampleDirectoryOrigin
+
+DarkFishTechnology_runCommand 0 "bash --version &> meta/bash.version"
+DarkFishTechnology_runCommand 0 "samtools &> meta/samtools.version"
+DarkFishTechnology_runCommand 0 "bcftools &> meta/bcftools.version"
+DarkFishTechnology_runCommand 0 "bwa &> meta/bwa.version"
+DarkFishTechnology_runCommand 0 "samstat -help &> meta/samstat.version"
+DarkFishTechnology_runCommand 0 "date > meta/date"
+DarkFishTechnology_runCommand 0 "uname -a > meta/uname"
+DarkFishTechnology_runCommand 0 "hostname > meta/hostname"
+
+# for bwa
+DarkFishTechnology_runCommand 0 "bwa index Reference/Reference.fasta"
+
+# for samtools
+DarkFishTechnology_runCommand 0 "samtools faidx Reference/Reference.fasta"
+
+DarkFishTechnology_moveReferenceCache
+
+
+# we have <processors> processors
+# and we have n files
+# the command is  bwa aln reference reads > sai
+# we have to generate some variables
+
+fileNumber=0
+
+DarkFishTechnology_runCommand 0 "mkdir SamAlignments"
+
+# generate alignments
+for file in $(ls Sample)
+do
+	processorNumber=$(($fileNumber%$processors))
+	randomFile=$(DarkFishTechnology_generateCacheEntry)
+	if [[ $file == *.bz2 ]]; then
+		command="( bwa bwasw Reference/Reference.fasta <(bzip2 -dc Sample/$file) | gzip > $randomFile ) ; ( DarkFishTechnology_linkCacheEntry $randomFile SamAlignments $file.sam.gz ) ; "
+	else
+		command="( bwa bwasw Reference/Reference.fasta Sample/$file | gzip > $randomFile ) ; ( DarkFishTechnology_linkCacheEntry $randomFile SamAlignments $file.sam.gz ) ; "
+	fi
+	processorVariable=processor$processorNumber"SamAlignments"
+	oldValue=$(eval echo \$$processorVariable)
+
+	newValue=$oldValue$command
+
+	toEval="$processorVariable=\"$newValue\""
+
+	eval $toEval
+
+	fileNumber=$(($fileNumber+1))
+done
+
+DarkFishTechnology_runGroupCommands "SamAlignments"
+
+DarkFishTechnology_finishAlignmentAnalysis
