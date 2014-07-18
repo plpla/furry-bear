@@ -441,45 +441,6 @@ class bam_file_handler:
         self.pipe_cleaner.join()
 
 
-
-
-def run_first_pipeline(arguments):
-    global aligned_contig_collection
-    #1. load Contigs.fasta
-    sys.stderr.write("Loading contigs.fasta\n")
-    contig_collection = load_contigs_dot_fasta(arguments["c"])
-    sys.stderr.write("Loading done\n")
-    #2. Load the genes from prodigal (load genes)
-    sys.stderr.write("Loading genes from prodigal file\n")
-    gene_collection = load_genes(arguments["p"])
-    sys.stderr.write("Loading genes done\n")
-    #3 Associate gene to contigs
-    sys.stderr.write("Associating genes to contigs\n")
-    contig_collection = associate_genes_to_contigs(contig_collection, gene_collection)
-    sys.stderr.write("Associating genes to contigs done\n")
-    #4 Create an "Aligned_contig" for each contig since we want to compare alignements
-    sys.stderr.write("Creating Aligned_contig objects\n")
-    #aligned_contig_collection = {}
-    #for contig in contig_collection:
-     #   aligned_contig_collection[contig_collection[contig].id] = Aligned_contig(contig_collection[contig])
-    #sys.stderr.write("Creating Aligned_contig objects done\n")
-    #4 Load gatk files using a cutoff...
-    sys.stderr.write("Loading GATK files\n")
-    aligned_contig_collection = add_genomic_position_to_aligned_contig(arguments, aligned_contig_collection)
-    #5 Get context from bam files. LONG
-    sys.stderr.write("Loading GATK files done\n")
-    sys.stderr.write("Computing context")
-    aligned_contig_collection = get_genomic_environment_from_bam(arguments, aligned_contig_collection)
-    sys.stderr.write("Computing context done\n")
-
-    #Just to check... we write to stdout
-    for i in aligned_contig_collection:
-        aligned_contig_collection[i].write_out()
-
-
-    #TODO: add warning if depth between GATK and BAM file is too different
-    #6 out???
-
 def get_bam_file_list(file_name):
     bam_files_list = {}
     for lines in open(file_name, 'rU'):
@@ -493,7 +454,7 @@ def get_bam_file_list(file_name):
     return bam_files_list
 
 
-def test_threaded_io(arguments):
+def run_first_pipeline(arguments):
 
     #1. load Contigs.fasta
     sys.stderr.write("Loading contigs.fasta\n")
@@ -537,19 +498,13 @@ def test_threaded_io(arguments):
             for sample in current_aligned_contig.comparable_samples:
                 aligned_contig[current_aligned_contig.contig.id].comparable_samples[sample] = (
                     current_aligned_contig.comparable_samples[sample])
-    del(m)
+    del(m) #needed?
     sys.stderr.write("Number of grouped contigs %s\n" % len(aligned_contig))
     sys.stderr.write("Loading GATK files done\n")
-
-
     sys.stderr.write("Computing context\n")
- #   for current_aligned_contig in aligned_contig:
-  #      aligned_contig[current_aligned_contig].set_bam_file_lists(arguments["g"])
     bam_files_list = get_bam_file_list(arguments["g"])
-    #b = bam_file_handler(arguments["n"])
     b.start(aligned_contig, bam_files_list)
     b.join()
-    #Lets optimize .bam file reading....
     aligned_contig = get_genomic_environment_from_bam(arguments, aligned_contig)
     #TODO: add warning if depth between GATK and BAM file is too different
     sys.stderr.write("Computing context done\n")
@@ -560,41 +515,15 @@ if __name__ == "__main__":
 
     parser = Option_parser(sys.argv[1:])
     arguments = parser.get_arguments()
-    #First step if asked: load gene file.
-    #have_gene_collection = False
-    #have_contig_collection = False
 
-    #if "g" in arguments:
-    ##    """
-    #    We will select only mutations inside genes
-    #    """
-    #    gene_collection = load_genes(arguments["g"])
-    #    have_gene_collection = True
-    #set depth and mutation ratio (they have a default value)
-    #minimum_depth = arguments["d"]
-    #minimum_mutation_ratio = arguments["r"]
-    #Load contigs id if needed
-    #if "c" in arguments:
-    #    """
-    #    We will select only mutations on these contigs
-    #    """
-    #    contigs_id_to_consider = parse_list(arguments["c"])
-    #    have_contig_collection = True
-    #if "f" in arguments:
-    ##    """
-     #   List of GATK file
-     #   """
-     #   gatk_file_list = parse_list( arguments["f"])
     """
     Fist pipeline. Need: -c , -p , -g
     1. load contigs.fasta
     2. Load genes from Prodigal outfile
     3. Load GATK file using cutoff
     4. Get context from bam files
-    5. Compare multiple days
     """
-    test_threaded_io(arguments)
-    #run_first_pipeline(arguments)
+    run_first_pipeline(arguments)
 
 
 
