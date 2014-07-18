@@ -1,11 +1,11 @@
-In this project, I have tried to work with sequences positions starting at 1 (not 0 like python).
+furry-bear
+==========
 
-Some functionnality require Pysam. It should be shipped with the code.
+Set of tools and functions to search SNPs in metagenomic samples
+
+Some functionnality require Pysam (https://github.com/pysam-developers/pysam)
 Pysam require cython, zlib ans easy_install (python setup-tools)
-Some functions requires biopython. It can be installed (debian based os) using:
-sudo apt-get install python-biopython
-More info at:
-biopython.org
+Some functions requires biopython (biopython.org)
 
-This is still in heavy developpement. New versions avaiblable every week.
+This is still in developpement.
 
