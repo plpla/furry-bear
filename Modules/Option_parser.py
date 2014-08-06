@@ -35,7 +35,7 @@ class Option_parser(object):
         self.pipeline1.add_argument("-o", type=str, help="Output",
                                      default="stdout", required=False)
         self.pipeline1.add_argument("-p", type=str,
-                                     help="File containing gene sequences for the contig file (produce by Prodigal",
+                                     help="File containing gene sequences for the contig file (produce by Prodigal)",
                                      required=False)
         self.pipeline1.add_argument("-s",
                                      help="Remove synonymous mutations",
@@ -43,6 +43,11 @@ class Option_parser(object):
         self.pipeline1.add_argument("-m",
                                      help="Calculate dn and ds. Will not output a table",
                                      type=bool, default=False, required=False)
+        # SD
+        self.pipeline1.add_argument("-gff",
+                                     help="GFF file to filter genes to be evaluated",
+                                     type=str, required=False)
+        # eoSD
 
         #self.parser.add_argument("")
         self.arguments = vars(self.parser.parse_args(args))

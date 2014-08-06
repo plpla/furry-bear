@@ -15,6 +15,8 @@ from Modules.Aligned_contig import Aligned_contig
 from Modules.Genomic_position import Genomic_position
 from Modules.Genomic_environment import Genomic_environment
 
+from Modules.Utility import isValid
+
 
 #contig_queue = JoinableQueue(5000) #For parallel gatk reading
 #aligned_contig_queue = Queue()
@@ -211,18 +213,18 @@ def load_contigs_dot_fasta(file_name):
             if not sequence == "":#if sequence is not empty...
                 contig_collection[header] = Contig(header, sequence)
                 sequence = ""
-            header = lines.split()[0]
+            header = lines.split()[0]                                           
         else:
             sequence += lines.rstrip('\n')
     return contig_collection
 
 def associate_genes_to_contigs(contig_collection, gene_collection):
-    for gene in gene_collection:
+    for gene in gene_collection.itervalues():
         try:
-            contig_collection[gene_collection[gene].contig_id].genes.append(gene)
+            contig_collection[gene.contig_id].genes.append(gene)
         except:
             warning_message = str("Gene %s was not associated to a contig. Most probably because %s does not exist\n" %
-                                  (gene_collection[gene].name, gene_collection[gene].contig_id))
+                                  (gene.name, gene.contig_id))
             sys.stderr.write(warning_message)
     return contig_collection
 
@@ -453,6 +455,53 @@ def get_bam_file_list(file_name):
         bam_files_list[sample_name] = bam_files
     return bam_files_list
 
+# SD
+def parse_gatk_like_file(contig_collection, gff_file):
+    
+    if not isValid(gff_file):
+        raise IOError("File '" + gff_file + "' could not be opened.")
+    
+    outDict = {}
+    
+    for line in open(gff_file, 'rU'):
+        lineSplit = line.split()
+
+        info = lineSplit[0]
+        geneStart = int(lineSplit[1])
+        geneEnd = int(lineSplit[2])
+        sens = lineSplit[3]
+        
+        if sens == '1':
+            sens = '+'
+        elif sens == '-1':
+            sens = '-'
+        else:
+            raise ValueError("Strand identifier is not recognisable.")
+
+        contigId_beginIndex = info.index('contig')
+
+        geneId = info[contigId_beginIndex:]
+        contigId = geneId.split('_')[0]
+        
+        contigHeader = '>' + contigId
+        geneIdFixed = '>' + geneId
+        
+        filteredGenes = list()
+        
+        
+        for gene in contig_collection[contigHeader].genes:
+            if gene.name == geneIdFixed:
+                if gene.start != geneStart or gene.end != geneEnd or gene.strand != sens:
+                    raise ValueError("Gene '"+ geneId +"' in gff file does not match in contig collection!")
+                else:
+                    filteredGenes.append(gene)
+        
+        outDict[contigHeader] = copy.copy(contig_collection[contigHeader])
+        outDict[contigHeader].genes = filteredGenes
+        
+    return outDict
+# eoSD
+
 
 def run_first_pipeline(arguments):
 
@@ -468,6 +517,11 @@ def run_first_pipeline(arguments):
     sys.stderr.write("Associating genes to contigs\n")
     contig_collection = associate_genes_to_contigs(contig_collection, gene_collection)
     sys.stderr.write("Associating genes to contigs done\n")
+    
+    # SD
+    contig_collection = parse_gatk_like_file(contig_collection, arguments["gff"])
+    # eoSD
+    
     #4 Create an "Aligned_contig" for each contig since we want to compare alignements
     #4 Load gatk files using a cutoff...
 
@@ -524,7 +578,5 @@ if __name__ == "__main__":
     4. Get context from bam files
     """
     run_first_pipeline(arguments)
-
-
 
 
