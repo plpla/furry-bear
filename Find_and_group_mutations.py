@@ -18,14 +18,6 @@ from Modules.Genomic_environment import Genomic_environment
 from Modules.Utility import isValid
 
 
-#contig_queue = JoinableQueue(5000) #For parallel gatk reading
-#aligned_contig_queue = Queue()
-#contig_collection = {}
-#aligned_contig_list = []
-#aligned_contig_collection = {}
-
-
-
 """
 I see this program as multiple function that can be pluged together to obtain the desired result.
 Let's see if it can work.
@@ -60,14 +52,13 @@ def gatk_reader(file_name, num_of_parser, chunk_queue):
     chunk_queue.put(contig_chunk)
     number_of_contig += 1
     sys.stderr.write("Reader %s: %s (# %s) was read and sent to queue.\n" % (os.getpid(), current_contig_name,
-                                                                                     number_of_contig))
+                                                                             number_of_contig))
     #we add a stop signal for every process in the queue
     for i in range(num_of_parser):
         chunk_queue.put("kill")
     chunk_queue.close()
     sys.stderr.write("Reader %s done\n" % os.getpid())
     #return
-
 
 
 def gatk_parser(sample_name, arguments, contig_collection, chunk_queue, result_queue):
@@ -105,6 +96,7 @@ def gatk_parser(sample_name, arguments, contig_collection, chunk_queue, result_q
             sys.stderr.write("Thread %s : %s not added  to list\n" % (os.getpid(), contig_name))
     result_queue.put("kill")
 
+
 def gatk_pipe_cleaner(result_queue, aligned_contig_list, num_of_parser):
     sys.stderr.write("Pipe cleaner %s started\n" % os.getpid())
     num_of_kill = 0
@@ -122,7 +114,6 @@ def gatk_pipe_cleaner(result_queue, aligned_contig_list, num_of_parser):
         aligned_contig_list.append(new_aligned_contig)
 
 
-
 class GATK_handler:
     """
     source: http://ikharn.blogspot.ca/2013/04/producer-consumer-with-python.html       and
@@ -135,20 +126,17 @@ class GATK_handler:
         self.result_queue = Queue()
         self.aligned_contig_list = self.manag.list()   #For the pipe cleaner
 
-
     def start(self, file_name, sample_name, arguments, contig_collection):
         self.p = Process(target=gatk_reader,  args=(file_name, self.NUM_OF_PROCESS, self.chunk_queue))
         self.p.start()
-        self.parsers= [Process(target=gatk_parser, args=(sample_name, arguments, contig_collection, self.chunk_queue,
+        self.parsers = [Process(target=gatk_parser, args=(sample_name, arguments, contig_collection, self.chunk_queue,
                                                           self.result_queue))
                         for i in xrange(self.NUM_OF_PROCESS)]
-        #def gatk_parser(sample_name, arguments, contig_collection, result_queue):
         for proc in self.parsers:
             proc.start()
         self.pipe_cleaner = Process(target= gatk_pipe_cleaner, args=(self.result_queue, self.aligned_contig_list,
                                                                     self.NUM_OF_PROCESS))
         self.pipe_cleaner.start()
-
 
     def check_status(self):
         """
@@ -163,15 +151,12 @@ class GATK_handler:
                 sys.stderr.write("%s is alive : %s dying!\n" % (i.pid, i.is_alive()))
                 break
 
-
-
     def join(self):
         sys.stderr.write("MANAGER: %s: joining process\n" % os.getpid())
         self.p.join()
         for i in self.parsers:
             i.join()
         self.pipe_cleaner.join()
-
 
 
 def load_genes(file_name):
@@ -237,7 +222,7 @@ def add_genomic_position_to_aligned_contig(arguments, aligned_contig_collection)
     :return: A dictionary of Aligned contig filled with Genomic_position selected based on the criterion in arguments
     """
     contig_treated = 0
-    "contig-23:1     2       2.00    2       A:2 C:0 G:0 T:0 N:0 "
+    #"contig-23:1     2       2.00    2       A:2 C:0 G:0 T:0 N:0 "
     for sample in open(arguments["g"], 'rU'):
         sample_id = sample.split()[0]
         print("Sample in treatment: %s" % sample)
