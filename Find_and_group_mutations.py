@@ -97,7 +97,7 @@ def gatk_parser(sample_name, arguments, contig_collection, chunk_queue, result_q
     result_queue.put("kill")
 
 
-def gatk_pipe_cleaner(result_queue, aligned_contig_list, num_of_parser):
+def gatk_pipe_cleaner(result_queue, aligned_contig_dict, num_of_parser):
     sys.stderr.write("Pipe cleaner %s started\n" % os.getpid())
     num_of_kill = 0
     while True:
@@ -111,7 +111,13 @@ def gatk_pipe_cleaner(result_queue, aligned_contig_list, num_of_parser):
             else:
                 continue
         #sys.stderr.write("Pipe cleaner: merging %s\n" % new_aligned_contig.contig.id)
-        aligned_contig_list.append(new_aligned_contig)
+        
+        if not new_aligned_contig.contig.id in aligned_contig_dict:
+            aligned_contig_dict[new_aligned_contig.contig.id] = new_aligned_contig
+        else:
+            for sample in new_aligned_contig.comparable_samples:
+                aligned_contig_dict[new_aligned_contig.contig.id].comparable_samples[sample] = \
+                    new_aligned_contig.comparable_samples[sample]
 
 
 class GATK_handler:
@@ -124,7 +130,7 @@ class GATK_handler:
         self.manag = Manager()
         self.chunk_queue = Queue(1000)  #TODO: optimize for Colosse
         self.result_queue = Queue()
-        self.aligned_contig_list = self.manag.list()   #For the pipe cleaner
+        self.aligned_contig_dict = self.manag.dict()   #For the pipe cleaner
 
     def start(self, file_name, sample_name, arguments, contig_collection):
         self.p = Process(target=gatk_reader,  args=(file_name, self.NUM_OF_PROCESS, self.chunk_queue))
@@ -134,7 +140,7 @@ class GATK_handler:
                         for i in xrange(self.NUM_OF_PROCESS)]
         for proc in self.parsers:
             proc.start()
-        self.pipe_cleaner = Process(target= gatk_pipe_cleaner, args=(self.result_queue, self.aligned_contig_list,
+        self.pipe_cleaner = Process(target= gatk_pipe_cleaner, args=(self.result_queue, self.aligned_contig_dict,
                                                                     self.NUM_OF_PROCESS))
         self.pipe_cleaner.start()
 
@@ -503,9 +509,7 @@ def run_first_pipeline(arguments):
     contig_collection = associate_genes_to_contigs(contig_collection, gene_collection)
     sys.stderr.write("Associating genes to contigs done\n")
     
-    # SD
     contig_collection = parse_gatk_like_file(contig_collection, arguments["gff"])
-    # eoSD
     
     #4 Create an "Aligned_contig" for each contig since we want to compare alignements
     #4 Load gatk files using a cutoff...
@@ -526,18 +530,9 @@ def run_first_pipeline(arguments):
         m.join()
         #We want this stuff in a dict.. not in a list!
 
-    aligned_contig = {}
-    sys.stderr.write("Number of ungrouped contigs %s\n" % len(m.aligned_contig_list))
-    while len(m.aligned_contig_list) > 0:
-        current_aligned_contig = m.aligned_contig_list.pop()
-        #print(current_aligned_contig)
-        if not current_aligned_contig.contig.id in aligned_contig:
-            aligned_contig[current_aligned_contig.contig.id] = current_aligned_contig
-        else:
-            for sample in current_aligned_contig.comparable_samples:
-                aligned_contig[current_aligned_contig.contig.id].comparable_samples[sample] = (
-                    current_aligned_contig.comparable_samples[sample])
+    aligned_contig = m.aligned_contig_dict
     del(m) #needed?
+    
     sys.stderr.write("Number of grouped contigs %s\n" % len(aligned_contig))
     sys.stderr.write("Loading GATK files done\n")
     sys.stderr.write("Computing context\n")
