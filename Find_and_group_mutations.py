@@ -446,21 +446,20 @@ def get_bam_file_list(file_name):
         bam_files_list[sample_name] = bam_files
     return bam_files_list
 
-# SD
 def parse_gatk_like_file(contig_collection, gff_file):
     
     if not isValid(gff_file):
         raise IOError("File '" + gff_file + "' could not be opened.")
     
-    outDict = {}
+    out_dict = {}
     
     for line in open(gff_file, 'rU'):
-        lineSplit = line.split()
+        line_split = line.split()
 
-        info = lineSplit[0]
-        geneStart = int(lineSplit[1])
-        geneEnd = int(lineSplit[2])
-        sens = lineSplit[3]
+        info = line_split[0]
+        gene_start = int(line_split[1])
+        gene_end = int(line_split[2])
+        sens = line_split[3]
         
         if sens == '1':
             sens = '+'
@@ -469,29 +468,28 @@ def parse_gatk_like_file(contig_collection, gff_file):
         else:
             raise ValueError("Strand identifier is not recognisable.")
 
-        contigId_beginIndex = info.index('contig')
+        contig_id_begin_index = info.index('contig')
 
-        geneId = info[contigId_beginIndex:]
-        contigId = geneId.split('_')[0]
+        gene_id = info[contig_id_begin_index:]
+        contigId = gene_id.split('_')[0]
         
-        contigHeader = '>' + contigId
-        geneIdFixed = '>' + geneId
+        contig_header = '>' + contigId
+        gene_id_fixed = '>' + gene_id
         
-        filteredGenes = list()
+        filtered_genes = list()
         
         
-        for gene in contig_collection[contigHeader].genes:
-            if gene.name == geneIdFixed:
-                if gene.start != geneStart or gene.end != geneEnd or gene.strand != sens:
-                    raise ValueError("Gene '"+ geneId +"' in gff file does not match in contig collection!")
+        for gene in contig_collection[contig_header].genes:
+            if gene.name == gene_id_fixed:
+                if gene.start != gene_start or gene.end != gene_end or gene.strand != sens:
+                    raise ValueError("Gene '"+ gene_id +"' in gff file does not match in contig collection!")
                 else:
-                    filteredGenes.append(gene)
+                    filtered_genes.append(gene)
         
-        outDict[contigHeader] = copy.copy(contig_collection[contigHeader])
-        outDict[contigHeader].genes = filteredGenes
+        out_dict[contig_header] = copy.copy(contig_collection[contig_header])
+        out_dict[contig_header].genes = filtered_genes
         
-    return outDict
-# eoSD
+    return out_dict
 
 
 def run_first_pipeline(arguments):
