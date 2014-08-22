@@ -44,6 +44,7 @@ class Genomic_position(object):
             self.update_depth()
         except:
             sys.stderr.write("fill_from_gatk_line: line is not standard:\n Problematic line: %s\n" % file_line)
+        return self
 
     def get_most_abundant(self):
         """
@@ -68,9 +69,10 @@ class Genomic_position(object):
         No parsing here. If you want to select mutations, do it somewhere else!
         :return:String with this format: A:  C:  G:  T:"
         """
-        proportion_a = str(self.nucl_a/self.depth)
-        proportion_c = str(self.nucl_c/self.depth)
-        proportion_g = str(self.nucl_g/self.depth)
-        proportion_t = str(self.nucl_t/self.depth)
+        self.update_depth()
+        proportion_a = str(float(self.nucl_a)/self.depth)
+        proportion_c = str(float(self.nucl_c)/self.depth)
+        proportion_g = str(float(self.nucl_g)/self.depth)
+        proportion_t = str(float(self.nucl_t)/self.depth)
         line = "A:"+proportion_a+" C:"+proportion_c+" G:"+proportion_g+" T:"+proportion_t
         return line

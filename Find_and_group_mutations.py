@@ -7,6 +7,7 @@ from multiprocessing import Process, Queue, Manager
 from time import sleep
 import copy
 import glob
+import gc
 
 from Modules.Gene import Gene
 from Modules.Contig import Contig
@@ -79,7 +80,7 @@ def gatk_parser(sample_name, arguments, contig_collection, chunk_queue, result_q
         for lines in chunk.split("\n"):
             contig_name = ">"+lines.split("\t")[0].split(":")[0]
             new_genomic_position = Genomic_position()
-            new_genomic_position.fill_from_gatk_line(lines)
+            new_genomic_position = new_genomic_position.fill_from_gatk_line(lines)
             genomic_position_array.append(new_genomic_position)
         if contig_name in contig_collection:
             new_aligned_contig = Aligned_contig(contig_collection[contig_name])
@@ -87,11 +88,7 @@ def gatk_parser(sample_name, arguments, contig_collection, chunk_queue, result_q
             new_aligned_contig.select_mutations(sample_name=sample_name, minimum_mutation_ratio=min_mutation_rate,
                                                 minimum_depth= min_depth, maximum_mutation_ratio= 1.0,
                                                 maximum_depth=1000000)
-
             result_queue.put(new_aligned_contig)
-            ####################################################
-            #Problem here. The process are not ending.... it takes too much time...
-            #######################################
         else:
             sys.stderr.write("Thread %s : %s not added  to list\n" % (os.getpid(), contig_name))
     result_queue.put("kill")
@@ -204,12 +201,16 @@ def load_contigs_dot_fasta(file_name):
             if not sequence == "":#if sequence is not empty...
                 contig_collection[header] = Contig(header, sequence)
                 sequence = ""
-            header = lines.split()[0]                                           
+            header = lines.rstrip('\n')                                           
         else:
             sequence += lines.rstrip('\n')
+    contig_collection[header] = Contig(header, sequence)
+    print("LOADER: %s" % contig_collection)
     return contig_collection
 
 def associate_genes_to_contigs(contig_collection, gene_collection):
+    sys.stderr.write("Association: contig_collection %s\n" %contig_collection)
+    sys.stderr.write("Association: gene_collection %s\n" %gene_collection)
     for gene in gene_collection.itervalues():
         try:
             contig_collection[gene.contig_id].genes.append(gene)
@@ -336,14 +337,16 @@ def get_genomic_environment_from_bam(arguments, aligned_contig_collection):
 
 def bam_problem_queue_producer(aligned_contig, problem_queue, num_of_proc):
     num_of_prob =  0
+    sys.stderr.write("\nBam problem producer. Aligned contigs=%s\n" %aligned_contig)
+    sys.stderr.write("Samples: %s\n" %aligned_contig[">region"].comparable_samples)
     for contig in aligned_contig:
         for sample in aligned_contig[contig].comparable_samples:
+            print("Bamming sample: %s" % sample)
             for position in aligned_contig[contig].comparable_samples[sample]:
                 new_problem = [contig, sample, position]
                 problem_queue.put(new_problem)
                 num_of_prob += 1
-                if num_of_prob % 100 == 0:
-                    sys.stderr.write("Have created more than %s problems\n" % num_of_prob)
+                sys.stderr.write("Have created more than %s problems\n" % num_of_prob)
     for proc in range(num_of_proc):
         poison = ["kill"]
         problem_queue.put(poison)
@@ -444,6 +447,7 @@ def get_bam_file_list(file_name):
         if len(bam_files) == 0:
             raise IOError("No bam file in directory %s\n" % bam_dir)
         bam_files_list[sample_name] = bam_files
+    print(bam_files_list)
     return bam_files_list
 
 def parse_gatk_like_file(contig_collection, gff_file):
@@ -506,15 +510,14 @@ def run_first_pipeline(arguments):
     sys.stderr.write("Associating genes to contigs\n")
     contig_collection = associate_genes_to_contigs(contig_collection, gene_collection)
     sys.stderr.write("Associating genes to contigs done\n")
-    
-    contig_collection = parse_gatk_like_file(contig_collection, arguments["gff"])
-    
+    if arguments['gff'] is not None:
+        contig_collection = parse_gatk_like_file(contig_collection, arguments["gff"])
+
     #4 Create an "Aligned_contig" for each contig since we want to compare alignements
     #4 Load gatk files using a cutoff...
 
     m = GATK_handler(arguments["n"])
     #Test: if i launch the bam_handler here... will there be a memory problem with the child process.?
-    b = bam_file_handler(arguments["n"])
     #####EO test
     for sample in open(arguments["g"], 'rU'):
 
@@ -527,19 +530,24 @@ def run_first_pipeline(arguments):
         #m.check_status()   #For debogue
         m.join()
         #We want this stuff in a dict.. not in a list!
+    if len(m.aligned_contig_dict) <=0:
+        raise Exception("No aligned contig. Programm will now stop")
+    aligned_contig = dict(m.aligned_contig_dict)
+    del(m)
+    gc.collect()
 
-    aligned_contig = m.aligned_contig_dict
-    del(m) #needed?
-    
     sys.stderr.write("Number of grouped contigs %s\n" % len(aligned_contig))
     sys.stderr.write("Loading GATK files done\n")
     sys.stderr.write("Computing context\n")
     bam_files_list = get_bam_file_list(arguments["g"])
+    b = bam_file_handler(arguments["n"])
+
     b.start(aligned_contig, bam_files_list)
     b.join()
     aligned_contig = get_genomic_environment_from_bam(arguments, aligned_contig)
     #TODO: add warning if depth between GATK and BAM file is too different
     sys.stderr.write("Computing context done\n")
+    
 
 
 
