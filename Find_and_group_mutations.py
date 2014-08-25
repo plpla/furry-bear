@@ -107,15 +107,13 @@ def gatk_pipe_cleaner(result_queue, aligned_contig_dict, num_of_parser):
                 break
             else:
                 continue
-        #sys.stderr.write("Pipe cleaner: merging %s\n" % new_aligned_contig.contig.id)
-        
+        sample_name = new_aligned_contig.comparable_samples.keys()[0]
         if not new_aligned_contig.contig.id in aligned_contig_dict:
             aligned_contig_dict[new_aligned_contig.contig.id] = new_aligned_contig
         else:
-            for sample in new_aligned_contig.comparable_samples:
-                aligned_contig_dict[new_aligned_contig.contig.id].comparable_samples[sample] = \
-                    new_aligned_contig.comparable_samples[sample]
-
+            contig_to_be_modified = aligned_contig_dict[new_aligned_contig.contig.id]
+            contig_to_be_modified.comparable_samples[sample_name] = new_aligned_contig.comparable_samples[sample_name]
+            aligned_contig_dict[new_aligned_contig.contig.id] = contig_to_be_modified
 
 class GATK_handler:
     """
@@ -338,7 +336,6 @@ def get_genomic_environment_from_bam(arguments, aligned_contig_collection):
 def bam_problem_queue_producer(aligned_contig, problem_queue, num_of_proc):
     num_of_prob =  0
     sys.stderr.write("\nBam problem producer. Aligned contigs=%s\n" %aligned_contig)
-    sys.stderr.write("Samples: %s\n" %aligned_contig[">region"].comparable_samples)
     for contig in aligned_contig:
         for sample in aligned_contig[contig].comparable_samples:
             print("Bamming sample: %s" % sample)
@@ -346,7 +343,8 @@ def bam_problem_queue_producer(aligned_contig, problem_queue, num_of_proc):
                 new_problem = [contig, sample, position]
                 problem_queue.put(new_problem)
                 num_of_prob += 1
-                sys.stderr.write("Have created more than %s problems\n" % num_of_prob)
+                if num_of_prob % 100 == 0:
+                    sys.stderr.write("Have created more than %s problems\n" % num_of_prob)
     for proc in range(num_of_proc):
         poison = ["kill"]
         problem_queue.put(poison)
@@ -522,7 +520,6 @@ def run_first_pipeline(arguments):
     for sample in open(arguments["g"], 'rU'):
 
         sample_id = sample.split()[0]
-        print("Sample in treatment: %s\n" % sample_id)
         sys.stderr.write("Loading GATK file: %s\n" % sample.split('\t')[1])
         file_name = sample.split('\t')[1]
         #m = Managerss(2)
