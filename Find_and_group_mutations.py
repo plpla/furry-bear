@@ -67,6 +67,7 @@ def gatk_parser(sample_name, arguments, contig_collection, chunk_queue, result_q
     sys.stderr.write("Thread %s : started!\n" % os.getpid())
     min_depth = arguments["d"]
     min_mutation_rate = arguments["r"]
+    #print("GATK_PARSER: sample in use: %s" % sample_name)
     while True:
 
         chunk = chunk_queue.get()
@@ -85,9 +86,11 @@ def gatk_parser(sample_name, arguments, contig_collection, chunk_queue, result_q
         if contig_name in contig_collection:
             new_aligned_contig = Aligned_contig(contig_collection[contig_name])
             new_aligned_contig.comparable_samples[sample_name] = genomic_position_array
+            #print("GATK_PARSER: just before selecting mutations: %s" %new_aligned_contig.comparable_samples)
             new_aligned_contig.select_mutations(sample_name=sample_name, minimum_mutation_ratio=min_mutation_rate,
                                                 minimum_depth= min_depth, maximum_mutation_ratio= 1.0,
                                                 maximum_depth=1000000)
+            #print("GATK_PARSER: just after selecting mutations: %s" %new_aligned_contig.comparable_samples)
             result_queue.put(new_aligned_contig)
         else:
             sys.stderr.write("Thread %s : %s not added  to list\n" % (os.getpid(), contig_name))
@@ -107,6 +110,8 @@ def gatk_pipe_cleaner(result_queue, aligned_contig_dict, num_of_parser):
                 break
             else:
                 continue
+        #sys.stderr.write("Pipe cleaner: merging %s\n" % new_aligned_contig.contig.id)
+       #Problem seems to be in the following section... 
         sample_name = new_aligned_contig.comparable_samples.keys()[0]
         if not new_aligned_contig.contig.id in aligned_contig_dict:
             aligned_contig_dict[new_aligned_contig.contig.id] = new_aligned_contig
@@ -367,6 +372,7 @@ def bam_problem_queue_solver(problem_queue, result_queue, bam_files_list):
         sample = problem[1]
         for bam_file in bam_files_list[sample]:
             new_genomic_env.populate(bam_file, 30) #TODO: 30 is min align score. Should be remplace with an argument
+        print("Solver: %s reads at pos %s" % (len(new_genomic_env.reads), new_genomic_env.position))
         result = [new_genomic_env, sample]
         result_queue.put(result)
         num_of_prob_solved += 1
@@ -384,24 +390,23 @@ def bam_pipe_cleaner(aligned_contig, result_queue, final_dict, num_of_proc):
             if num_of_poison == num_of_proc:
                 sys.stderr.write("Bam pipe cleaner (pid: %s) dying\n" % os.getpid())
                 break
-        continue
+            continue
         sample = result[1]
         genomic_env = result[0]
-        contig_id = aligned_contig[genomic_env.contig].contig.id
-        if contig_id in final_dict:
-            for position in final_dict[contig_id].comparable_samples[sample]:
-                if position.position == genomic_env.position:
-                    position.environment = genomic_env
-        else:
-            #We must create a copy in the final dict
-            #unaligned_contig = copy.copy(aligned_contig[contig_id].contig)
-            new_aligned_contig = copy.deepcopy(aligned_contig[contig_id])
+        print("Cleaner: %s reads at pos %s" % (len(genomic_env.reads), genomic_env.position))
+        contig_id = genomic_env.contig
+        if not contig_id in final_dict:
+#            new_aligned_contig = copy.deepcopy(aligned_contig[contig_id])
+            new_aligned_contig = aligned_contig[contig_id]
             final_dict[contig_id] = new_aligned_contig
-            for position in final_dict[contig_id].comparable_samples[sample]:
-                if position.position == genomic_env.position:
-                    position.environment = genomic_env
-        #that should do it?
+        current_contig =  final_dict[contig_id]
 
+        for position in current_contig.comparable_samples[sample]: #this is some serious waste of time...
+            #print("CLEANER: %s"  %position)
+            if position.position == genomic_env.position:
+                position.environment = genomic_env
+        #current_contig.comparable_samples[sample][position] = genomic_env.position
+        final_dict[contig_id] = current_contig
 
 class bam_file_handler:
     def __init__(self, num_of_proc):
@@ -541,11 +546,25 @@ def run_first_pipeline(arguments):
 
     b.start(aligned_contig, bam_files_list)
     b.join()
-    aligned_contig = get_genomic_environment_from_bam(arguments, aligned_contig)
+
+    aligned_contig = dict(b.final_dict)
     #TODO: add warning if depth between GATK and BAM file is too different
     sys.stderr.write("Computing context done\n")
+    for contig in aligned_contig:
+        for sample in aligned_contig[contig].comparable_samples:
+            #print(aligned_contig[contig].comparable_samples[sample])
+            print(sample)
+            for position in aligned_contig[contig].comparable_samples[sample]:
+                #position.environment.output_by_sequence()
+                #print(position.get_mutations_string())
+                position.environment.output_by_reads()
+                
+                #print(position.environment.position)
+                #print(len(position.environment.reads))
+               # print(aligned_contig[contig].comparable_samples[sample][
+            #    aligned_contig[contig].comparable_samples[sample][position].environment.output_by_reads()
+    #print(aligned_contig)
     
-
 
 
 if __name__ == "__main__":
